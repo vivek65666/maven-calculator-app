@@ -156,9 +156,9 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'tomcat-creds',
                         usernameVariable: 'TOMCAT_USERNAME', passwordVariable: 'TOMCAT_PASSWORD')]) {
-                    sh 'mvn -B cargo:redeploy -Dtomcat.url=$PROD_TOMCAT/manager/text -Dtomcat.path=$PROD_CONTEXT'
+                    bat 'mvn -B cargo:redeploy -Dtomcat.url=$PROD_TOMCAT/manager/text -Dtomcat.path=$PROD_CONTEXT'
                 }
-                sh 'curl -sf --retry 10 --retry-delay 3 --retry-all-errors $PROD_TOMCAT/$PROD_CONTEXT/api/calculator/ping'
+                bat 'curl -sf --retry 10 --retry-delay 3 --retry-all-errors $PROD_TOMCAT/$PROD_CONTEXT/api/calculator/ping'
             }
         }
     }
