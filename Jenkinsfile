@@ -43,20 +43,20 @@ pipeline {
         stage('Validate & Lint') {
             steps {
                 // validate: pom.xml is correct; checkstyle:check: code follows checkstyle.xml rules
-                sh 'mvn -B validate checkstyle:check'
+                bat 'mvn -B validate checkstyle:check'
             }
         }
 
         stage('Build') {
             steps {
-                sh 'mvn -B clean compile'
+                bat 'mvn -B clean compile'
             }
         }
 
         stage('Unit Test') {
             steps {
                 // also writes the JaCoCo coverage report used by SonarQube
-                sh 'mvn -B test'
+                bat 'mvn -B test'
             }
             post {
                 always {
@@ -69,7 +69,7 @@ pipeline {
             when { expression { params.RUN_SONAR } }
             steps {
                 withSonarQubeEnv('sonarqube') {
-                    sh 'mvn -B sonar:sonar'
+                    bat 'mvn -B sonar:sonar'
                 }
             }
         }
@@ -86,7 +86,7 @@ pipeline {
 
         stage('Package') {
             steps {
-                sh 'mvn -B package -DskipTests'
+                bat 'mvn -B package -DskipTests'
             }
             post {
                 success {
@@ -98,7 +98,7 @@ pipeline {
         stage('Integration Test') {
             steps {
                 // starts Jetty on port 9999, runs *IT.java against it, stops Jetty
-                sh 'mvn -B verify -DskipUTs'
+                bat 'mvn -B verify -DskipUTs'
             }
             post {
                 always {
@@ -111,7 +111,7 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'artifactory-creds',
                         usernameVariable: 'ARTIFACTORY_USERNAME', passwordVariable: 'ARTIFACTORY_PASSWORD')]) {
-                    sh 'mvn -B -s settings-artifactory.xml deploy -DskipTests -Dartifactory.url=$ARTIFACTORY_URL'
+                    bat 'mvn -B -s settings-artifactory.xml deploy -DskipTests -Dartifactory.url=$ARTIFACTORY_URL'
                 }
             }
         }
@@ -120,10 +120,10 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'tomcat-creds',
                         usernameVariable: 'TOMCAT_USERNAME', passwordVariable: 'TOMCAT_PASSWORD')]) {
-                    sh 'mvn -B cargo:redeploy -Dtomcat.url=$QA_TOMCAT/manager/text -Dtomcat.path=$QA_CONTEXT'
+                    bat 'mvn -B cargo:redeploy -Dtomcat.url=$QA_TOMCAT/manager/text -Dtomcat.path=$QA_CONTEXT'
                 }
                 // smoke test: the app answers after deployment
-                sh 'curl -sf --retry 10 --retry-delay 3 --retry-all-errors $QA_TOMCAT/$QA_CONTEXT/api/calculator/ping'
+                bat 'curl -sf --retry 10 --retry-delay 3 --retry-all-errors $QA_TOMCAT/$QA_CONTEXT/api/calculator/ping'
             }
         }
 
