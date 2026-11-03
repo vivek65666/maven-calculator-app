@@ -1,15 +1,8 @@
-// CI/CD pipeline for the Java Maven Calculator Web App.
+// CI/CD pipeline for the Java Maven Calculator Web App (Windows Compatible).
 //
-// Stage order follows a typical company pipeline - cheap checks first, fail fast:
-//   Checkout -> Validate & Lint -> Build -> Unit Test -> SonarQube Analysis -> Quality Gate
-//   -> Package -> Integration Test -> Publish to Artifactory
-//   -> Deploy to QA -> Performance Test (on QA) -> Approval -> Deploy to Production
-//
-// Jenkins needs (see README "2. CI/CD with Jenkins"):
-//   - JDK 17+ and Maven on the agent (curl too, for the smoke tests)
-//   - Plugins: Pipeline, Git, JUnit, Credentials Binding, SonarQube Scanner, Pipeline Stage View
-//   - Credentials (Username with password): artifactory-creds, tomcat-creds
-//   - Manage Jenkins -> System -> SonarQube servers: a server named "sonarqube"
+// Stage order: Checkout -> Validate & Lint -> Build -> Unit Test -> SonarQube Analysis -> Quality Gate
+// -> Package -> Integration Test -> Publish to Artifactory
+// -> Deploy to QA -> Performance Test (on QA) -> Approval -> Deploy to Production
 
 pipeline {
     agent any
@@ -19,11 +12,9 @@ pipeline {
     }
 
     environment {
-        // ---- change these to your servers ----
         ARTIFACTORY_URL  = 'http://localhost:8082/artifactory'
         QA_TOMCAT        = 'http://localhost:8080'
         PROD_TOMCAT      = 'http://localhost:8080'
-        // QA and Production can be the same Tomcat for a demo: the app is deployed under different paths
         QA_CONTEXT       = 'calculator-qa'
         PROD_CONTEXT     = 'calculator'
     }
@@ -42,7 +33,6 @@ pipeline {
 
         stage('Validate & Lint') {
             steps {
-                // validate: pom.xml is correct; checkstyle:check: code follows checkstyle.xml rules
                 bat 'mvn -B validate checkstyle:check'
             }
         }
@@ -55,7 +45,6 @@ pipeline {
 
         stage('Unit Test') {
             steps {
-                // also writes the JaCoCo coverage report used by SonarQube
                 bat 'mvn -B test'
             }
             post {
@@ -77,7 +66,6 @@ pipeline {
         stage('Quality Gate') {
             when { expression { params.RUN_SONAR } }
             steps {
-                // needs a SonarQube webhook to http://<jenkins>/sonarqube-webhook/
                 timeout(time: 5, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -97,7 +85,6 @@ pipeline {
 
         stage('Integration Test') {
             steps {
-                // starts Jetty on port 9999, runs *IT.java against it, stops Jetty
                 bat 'mvn -B verify -DskipUTs'
             }
             post {
@@ -111,7 +98,7 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'artifactory-creds',
                         usernameVariable: 'ARTIFACTORY_USERNAME', passwordVariable: 'ARTIFACTORY_PASSWORD')]) {
-                    bat 'mvn -B -s settings-artifactory.xml deploy -DskipTests -Dartifactory.url=$ARTIFACTORY_URL'
+                    bat 'mvn -B -s settings-artifactory.xml deploy -DskipTests -Dartifactory.url=%ARTIFACTORY_URL%'
                 }
             }
         }
@@ -120,21 +107,17 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'tomcat-creds',
                         usernameVariable: 'TOMCAT_USERNAME', passwordVariable: 'TOMCAT_PASSWORD')]) {
-                    bat 'mvn -B cargo:redeploy -Dtomcat.url=$QA_TOMCAT/manager/text -Dtomcat.path=$QA_CONTEXT'
+                    bat 'mvn -B cargo:redeploy -Dtomcat.url=%QA_TOMCAT%/manager/text -Dtomcat.path=%QA_CONTEXT%'
                 }
-                // smoke test: the app answers after deployment
-                bat 'curl -sf --retry 10 --retry-delay 3 --retry-all-errors $QA_TOMCAT/$QA_CONTEXT/api/calculator/ping'
+                bat 'curl -sf --retry 10 --retry-delay 3 --retry-all-errors %QA_TOMCAT%/%QA_CONTEXT%/api/calculator/ping'
             }
         }
 
         stage('Performance Test') {
             steps {
-                // JMeter load test against the app running on QA; fails if any request fails
-                sh '''
-                    QA_HOST=$(echo $QA_TOMCAT | sed -E 's#https?://##; s#:.*##')
-                    QA_PORT=$(echo $QA_TOMCAT | sed -E 's#https?://[^:]*:?##')
-                    mvn -B verify -Pperformance -DskipTests \
-                        -Dperf.host=$QA_HOST -Dperf.port=${QA_PORT:-80} -Dperf.context=$QA_CONTEXT
+                bat '''
+                    mvn -B verify -Pperformance -DskipTests ^
+                        -Dperf.host=localhost -Dperf.port=8080 -Dperf.context=%QA_CONTEXT%
                 '''
             }
             post {
@@ -156,9 +139,9 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'tomcat-creds',
                         usernameVariable: 'TOMCAT_USERNAME', passwordVariable: 'TOMCAT_PASSWORD')]) {
-                    bat 'mvn -B cargo:redeploy -Dtomcat.url=$PROD_TOMCAT/manager/text -Dtomcat.path=$PROD_CONTEXT'
+                    bat 'mvn -B cargo:redeploy -Dtomcat.url=%PROD_TOMCAT%/manager/text -Dtomcat.path=%PROD_CONTEXT%'
                 }
-                bat 'curl -sf --retry 10 --retry-delay 3 --retry-all-errors $PROD_TOMCAT/$PROD_CONTEXT/api/calculator/ping'
+                bat 'curl -sf --retry 10 --retry-delay 3 --retry-all-errors %PROD_TOMCAT%/%PROD_CONTEXT%/api/calculator/ping'
             }
         }
     }
